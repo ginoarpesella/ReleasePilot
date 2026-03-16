@@ -1,0 +1,607 @@
+{
+  "info": {
+    "name": "ReleasePilot API",
+    "description": "Sequential test collection for the ReleasePilot API. Run in order — each request uses the promotion ID from the first request.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5180",
+      "type": "string"
+    },
+    {
+      "key": "promotionId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Health Check",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Health check returns 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Status is healthy', function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.status).to.eql('healthy');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Request Promotion (Dev → Staging)",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{baseUrl}}/api/promotions",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "promotions"]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"applicationName\": \"PaymentService\",\n  \"version\": \"2.1.0\",\n  \"sourceEnvironment\": 0,\n  \"targetEnvironment\": 1,\n  \"requestedBy\": \"dev@example.com\",\n  \"workItemReferences\": [\"WI-101\", \"WI-102\", \"WI-103\"]\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Promotion created with 201', function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "pm.test('Response contains promotion ID', function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.id).to.be.a('string');",
+              "    pm.collectionVariables.set('promotionId', json.id);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Get Promotion by ID",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/promotions/{{promotionId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "promotions", "{{promotionId}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Returns 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Promotion is in Requested state', function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.applicationName).to.eql('PaymentService');",
+              "    pm.expect(json.version).to.eql('2.1.0');",
+              "    pm.expect(json.status).to.eql('Requested');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. List Promotions by Application",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/promotions/application/PaymentService?page=1&pageSize=10",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "promotions", "application", "PaymentService"],
+          "query": [
+            { "key": "page", "value": "1" },
+            { "key": "pageSize", "value": "10" }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Returns 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Contains at least one promotion', function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.items.length).to.be.greaterThan(0);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Get Environment Status",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/promotions/application/PaymentService/status",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "promotions", "application", "PaymentService", "status"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Returns 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Contains environment statuses', function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.applicationName).to.eql('PaymentService');",
+              "    pm.expect(json.environments).to.be.an('array');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Approve Promotion",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{baseUrl}}/api/promotions/{{promotionId}}/approve",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "promotions", "{{promotionId}}", "approve"]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"approvedBy\": \"lead@example.com\",\n  \"isApprover\": true\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Promotion approved with 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Response confirms approval', function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.message).to.eql('Promotion approved.');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Approve Again (expect 422 - invalid transition)",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{baseUrl}}/api/promotions/{{promotionId}}/approve",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "promotions", "{{promotionId}}", "approve"]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"approvedBy\": \"lead@example.com\",\n  \"isApprover\": true\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Duplicate approval returns 422', function () {",
+              "    pm.response.to.have.status(422);",
+              "});",
+              "pm.test('Error contains INVALID_TRANSITION code', function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.code).to.eql('INVALID_TRANSITION');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Start Deployment",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{baseUrl}}/api/promotions/{{promotionId}}/deploy",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "promotions", "{{promotionId}}", "deploy"]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"startedBy\": \"deploy-bot@example.com\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Deployment started with 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Response confirms deployment', function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.message).to.eql('Deployment started.');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Complete Promotion",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{baseUrl}}/api/promotions/{{promotionId}}/complete",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "promotions", "{{promotionId}}", "complete"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Promotion completed with 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Response confirms completion', function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.message).to.eql('Promotion completed.');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Verify Final State",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/promotions/{{promotionId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "promotions", "{{promotionId}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Returns 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Promotion is in Completed state', function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.status).to.eql('Completed');",
+              "});",
+              "pm.test('State history has 4 transitions', function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.stateHistory.length).to.eql(4);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. Request Promotion for Rollback Test",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{baseUrl}}/api/promotions",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "promotions"]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"applicationName\": \"OrderService\",\n  \"version\": \"1.0.0\",\n  \"sourceEnvironment\": 1,\n  \"targetEnvironment\": 2,\n  \"requestedBy\": \"dev@example.com\",\n  \"workItemReferences\": [\"WI-201\"]\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Promotion created with 201', function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "var json = pm.response.json();",
+              "pm.collectionVariables.set('promotionId', json.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12. Approve for Rollback Test",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{baseUrl}}/api/promotions/{{promotionId}}/approve",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "promotions", "{{promotionId}}", "approve"]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"approvedBy\": \"lead@example.com\",\n  \"isApprover\": true\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Approved with 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13. Start Deployment for Rollback Test",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{baseUrl}}/api/promotions/{{promotionId}}/deploy",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "promotions", "{{promotionId}}", "deploy"]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"startedBy\": \"deploy-bot@example.com\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Deployment started with 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14. Rollback Promotion",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{baseUrl}}/api/promotions/{{promotionId}}/rollback",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "promotions", "{{promotionId}}", "rollback"]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"reason\": \"Critical performance regression detected in production\",\n  \"rolledBackBy\": \"oncall@example.com\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Rollback returns 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Response confirms rollback', function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.message).to.eql('Promotion rolled back.');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15. Request Promotion for Cancel Test",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{baseUrl}}/api/promotions",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "promotions"]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"applicationName\": \"NotificationService\",\n  \"version\": \"3.0.0\",\n  \"sourceEnvironment\": 0,\n  \"targetEnvironment\": 1,\n  \"requestedBy\": \"dev@example.com\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Promotion created with 201', function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "var json = pm.response.json();",
+              "pm.collectionVariables.set('promotionId', json.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16. Cancel Promotion",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{baseUrl}}/api/promotions/{{promotionId}}/cancel",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "promotions", "{{promotionId}}", "cancel"]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"cancelledBy\": \"dev@example.com\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Cancel returns 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Response confirms cancellation', function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.message).to.eql('Promotion cancelled.');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "17. Verify Cancelled State is Immutable",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{baseUrl}}/api/promotions/{{promotionId}}/approve",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "promotions", "{{promotionId}}", "approve"]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"approvedBy\": \"lead@example.com\",\n  \"isApprover\": true\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Cannot approve cancelled promotion - returns 422', function () {",
+              "    pm.response.to.have.status(422);",
+              "});",
+              "pm.test('Error code is INVALID_TRANSITION', function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.code).to.eql('INVALID_TRANSITION');",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
