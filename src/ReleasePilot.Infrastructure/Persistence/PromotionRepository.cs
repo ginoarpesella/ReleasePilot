@@ -37,7 +37,6 @@ public class PromotionRepository : IPromotionRepository
         }
 
         _context.Promotions.Add(promotion);
-        await _context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task UpdateAsync(Promotion promotion, CancellationToken cancellationToken = default)
@@ -67,7 +66,6 @@ public class PromotionRepository : IPromotionRepository
         }
 
         _context.Promotions.Update(promotion);
-        await _context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<bool> HasInProgressPromotionAsync(string applicationName, string targetEnvironment, CancellationToken cancellationToken = default)
@@ -76,16 +74,6 @@ public class PromotionRepository : IPromotionRepository
             p => p.ApplicationName == applicationName
                 && p.TargetEnvironment.ToString() == targetEnvironment
                 && p.Status == PromotionStatus.InProgress,
-            cancellationToken);
-    }
-
-    public async Task<bool> HasCompletedPromotionForEnvironmentAsync(string applicationName, string version, string environment, CancellationToken cancellationToken = default)
-    {
-        return await _context.Promotions.AnyAsync(
-            p => p.ApplicationName == applicationName
-                && p.Version == version
-                && p.TargetEnvironment.ToString() == environment
-                && p.Status == PromotionStatus.Completed,
             cancellationToken);
     }
 }

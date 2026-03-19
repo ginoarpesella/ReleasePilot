@@ -18,6 +18,7 @@ public class Promotion
     public DateTime? CompletedAt { get; private set; }
     public string? RollbackReason { get; private set; }
     public List<string> WorkItemReferences { get; private set; } = [];
+    public uint RowVersion { get; private set; }
 
     private readonly List<StateTransition> _stateHistory = [];
     public IReadOnlyList<StateTransition> StateHistory => _stateHistory.AsReadOnly();

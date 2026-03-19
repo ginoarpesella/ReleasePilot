@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using ReleasePilot.Domain.Exceptions;
 
 namespace ReleasePilot.Api.Middleware;
@@ -17,6 +18,20 @@ public class DomainExceptionMiddleware
         try
         {
             await _next(context);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            context.Response.StatusCode = StatusCodes.Status409Conflict;
+            context.Response.ContentType = "application/json";
+
+            var error = new
+            {
+                type = "ConcurrencyConflict",
+                code = "CONCURRENCY_CONFLICT",
+                message = "The promotion was modified by another request. Please retry."
+            };
+
+            await context.Response.WriteAsync(JsonSerializer.Serialize(error));
         }
         catch (DomainException ex)
         {

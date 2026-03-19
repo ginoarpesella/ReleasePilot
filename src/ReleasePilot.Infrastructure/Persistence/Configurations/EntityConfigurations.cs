@@ -19,6 +19,9 @@ public class PromotionConfiguration : IEntityTypeConfiguration<Promotion>
         builder.Property(p => p.RequestedBy).IsRequired().HasMaxLength(200);
         builder.Property(p => p.RollbackReason).HasMaxLength(2000);
 
+        builder.Property(p => p.RowVersion)
+            .IsRowVersion();
+
         builder.Property(p => p.WorkItemReferences)
             .HasConversion(
                 v => string.Join(",", v),
@@ -30,6 +33,10 @@ public class PromotionConfiguration : IEntityTypeConfiguration<Promotion>
 
         builder.HasIndex(p => new { p.ApplicationName, p.TargetEnvironment, p.Status });
         builder.HasIndex(p => new { p.ApplicationName, p.CreatedAt });
+
+        builder.HasIndex(p => new { p.ApplicationName, p.TargetEnvironment })
+            .HasFilter("\"Status\" = 'InProgress'")
+            .IsUnique();
     }
 }
 

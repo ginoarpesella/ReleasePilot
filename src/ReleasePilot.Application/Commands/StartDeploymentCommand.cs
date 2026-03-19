@@ -14,15 +14,18 @@ public class StartDeploymentHandler : IRequestHandler<StartDeploymentCommand>
     private readonly IPromotionRepository _repository;
     private readonly IEventBus _eventBus;
     private readonly IDeploymentPort _deploymentPort;
+    private readonly IUnitOfWork _unitOfWork;
 
     public StartDeploymentHandler(
         IPromotionRepository repository,
         IEventBus eventBus,
-        IDeploymentPort deploymentPort)
+        IDeploymentPort deploymentPort,
+        IUnitOfWork unitOfWork)
     {
         _repository = repository;
         _eventBus = eventBus;
         _deploymentPort = deploymentPort;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task Handle(StartDeploymentCommand request, CancellationToken cancellationToken)
@@ -44,6 +47,12 @@ public class StartDeploymentHandler : IRequestHandler<StartDeploymentCommand>
 
         foreach (var domainEvent in promotion.DomainEvents)
             await _eventBus.PublishAsync(domainEvent, cancellationToken);
+
+        // Atomic commit: aggregate + outbox messages in a single transaction
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        // Dispatch in-process notifications after transaction commits
+        await _eventBus.DispatchPendingAsync(cancellationToken);
 
         promotion.ClearDomainEvents();
     }

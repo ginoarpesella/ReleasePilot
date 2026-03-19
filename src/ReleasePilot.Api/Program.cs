@@ -46,6 +46,9 @@ builder.Services.AddSingleton(new RabbitMqSettings { ConnectionString = rabbitMq
 builder.Services.AddScoped<IPromotionRepository, PromotionRepository>();
 builder.Services.AddScoped<IPromotionReadRepository, PromotionReadRepository>();
 
+// --- Unit of Work ---
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+
 // --- Event Bus (Outbox Pattern) ---
 builder.Services.AddScoped<IEventBus, OutboxEventBus>();
 

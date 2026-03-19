@@ -17,11 +17,13 @@ public class RequestPromotionHandler : IRequestHandler<RequestPromotionCommand, 
 {
     private readonly IPromotionRepository _repository;
     private readonly IEventBus _eventBus;
+    private readonly IUnitOfWork _unitOfWork;
 
-    public RequestPromotionHandler(IPromotionRepository repository, IEventBus eventBus)
+    public RequestPromotionHandler(IPromotionRepository repository, IEventBus eventBus, IUnitOfWork unitOfWork)
     {
         _repository = repository;
         _eventBus = eventBus;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task<Guid> Handle(RequestPromotionCommand request, CancellationToken cancellationToken)
@@ -39,6 +41,12 @@ public class RequestPromotionHandler : IRequestHandler<RequestPromotionCommand, 
 
         foreach (var domainEvent in promotion.DomainEvents)
             await _eventBus.PublishAsync(domainEvent, cancellationToken);
+
+        // Atomic commit: aggregate + outbox messages in a single transaction
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        // Dispatch in-process notifications after transaction commits
+        await _eventBus.DispatchPendingAsync(cancellationToken);
 
         promotion.ClearDomainEvents();
         return promotion.Id;
