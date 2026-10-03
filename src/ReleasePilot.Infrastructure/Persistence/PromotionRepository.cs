@@ -39,18 +39,18 @@ public class PromotionRepository : IPromotionRepository
         _context.Promotions.Add(promotion);
     }
 
-    public async Task UpdateAsync(Promotion promotion, CancellationToken cancellationToken = default)
+    public Task UpdateAsync(Promotion promotion, CancellationToken cancellationToken = default)
     {
-        // Persist new state transitions
+        // Persist new state transitions. StateHistory is not loaded from the database, so it only
+        // holds transitions raised in this scope; dedupe against the change tracker instead of querying.
+        var tracked = _context.StateTransitions.Local
+            .Where(s => s.PromotionId == promotion.Id)
+            .Select(s => (s.ToStatus, s.TransitionedAt))
+            .ToHashSet();
+
         foreach (var transition in promotion.StateHistory)
         {
-            var exists = await _context.StateTransitions
-                .AnyAsync(s => s.PromotionId == promotion.Id
-                    && s.ToStatus == transition.ToStatus.ToString()
-                    && s.TransitionedAt == transition.TransitionedAt,
-                    cancellationToken);
-
-            if (!exists)
+            if (tracked.Add((transition.ToStatus.ToString(), transition.TransitionedAt)))
             {
                 _context.StateTransitions.Add(new StateTransitionEntity
                 {
@@ -65,14 +65,22 @@ public class PromotionRepository : IPromotionRepository
             }
         }
 
-        _context.Promotions.Update(promotion);
+        // Tracked entities are saved via change detection (only modified columns);
+        // Update() would mark every column dirty.
+        if (_context.Entry(promotion).State == EntityState.Detached)
+            _context.Promotions.Update(promotion);
+
+        return Task.CompletedTask;
     }
 
     public async Task<bool> HasInProgressPromotionAsync(string applicationName, string targetEnvironment, CancellationToken cancellationToken = default)
     {
+        // Compare on the mapped enum (not ToString()) so the composite index can be used
+        var environment = Enum.Parse<DeploymentEnvironment>(targetEnvironment);
+
         return await _context.Promotions.AnyAsync(
             p => p.ApplicationName == applicationName
-                && p.TargetEnvironment.ToString() == targetEnvironment
+                && p.TargetEnvironment == environment
                 && p.Status == PromotionStatus.InProgress,
             cancellationToken);
     }
