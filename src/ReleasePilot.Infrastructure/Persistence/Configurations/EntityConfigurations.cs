@@ -66,7 +66,9 @@ public class OutboxMessageConfiguration : IEntityTypeConfiguration<OutboxMessage
         builder.Property(o => o.EventType).IsRequired().HasMaxLength(200);
         builder.Property(o => o.Payload).IsRequired();
 
-        builder.HasIndex(o => o.IsProcessed);
+        // Partial index matching the OutboxProcessor poll: only pending rows, in CreatedAt order
+        builder.HasIndex(o => o.CreatedAt)
+            .HasFilter("\"IsProcessed\" = false");
     }
 }
 

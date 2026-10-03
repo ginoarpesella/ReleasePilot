@@ -48,23 +48,29 @@ public class PromotionReadRepository : IPromotionReadRepository
     public async Task<EnvironmentStatusReadModel> GetEnvironmentStatusAsync(
         string applicationName, CancellationToken cancellationToken = default)
     {
-        var environments = new List<EnvironmentPromotionStatus>();
-
-        foreach (var env in Enum.GetValues<DeploymentEnvironment>())
-        {
-            var latestPromotion = await _context.Promotions
-                .AsNoTracking()
-                .Where(p => p.ApplicationName == applicationName && p.TargetEnvironment == env)
+        // Single round trip: latest promotion per target environment
+        var latestByEnvironment = await _context.Promotions
+            .AsNoTracking()
+            .Where(p => p.ApplicationName == applicationName)
+            .GroupBy(p => p.TargetEnvironment)
+            .Select(g => g
                 .OrderByDescending(p => p.CreatedAt)
-                .FirstOrDefaultAsync(cancellationToken);
+                .Select(p => new { p.TargetEnvironment, p.Id, p.Version, p.Status, p.CreatedAt })
+                .First())
+            .ToDictionaryAsync(p => p.TargetEnvironment, cancellationToken);
 
-            environments.Add(new EnvironmentPromotionStatus(
-                env.ToString(),
-                latestPromotion?.Id,
-                latestPromotion?.Version,
-                latestPromotion?.Status.ToString(),
-                latestPromotion?.CreatedAt));
-        }
+        var environments = Enum.GetValues<DeploymentEnvironment>()
+            .Select(env =>
+            {
+                var latest = latestByEnvironment.GetValueOrDefault(env);
+                return new EnvironmentPromotionStatus(
+                    env.ToString(),
+                    latest?.Id,
+                    latest?.Version,
+                    latest?.Status.ToString(),
+                    latest?.CreatedAt);
+            })
+            .ToList();
 
         return new EnvironmentStatusReadModel(applicationName, environments);
     }

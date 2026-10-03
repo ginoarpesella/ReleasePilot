@@ -24,6 +24,7 @@ public class OutboxProcessor : BackgroundService
 
     public const string ExchangeName = "releasepilot.events";
     public const string QueueName = "releasepilot.audit";
+    private const int BatchSize = 50;
 
     public OutboxProcessor(
         IServiceScopeFactory scopeFactory,
@@ -67,6 +68,8 @@ public class OutboxProcessor : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            var batchWasFull = false;
+
             try
             {
                 using var scope = _scopeFactory.CreateScope();
@@ -75,28 +78,38 @@ public class OutboxProcessor : BackgroundService
                 var messages = await context.OutboxMessages
                     .Where(m => !m.IsProcessed)
                     .OrderBy(m => m.CreatedAt)
-                    .Take(50)
+                    .Take(BatchSize)
                     .ToListAsync(stoppingToken);
 
-                foreach (var message in messages)
+                batchWasFull = messages.Count == BatchSize;
+
+                try
                 {
-                    var body = Encoding.UTF8.GetBytes(message.Payload);
-                    var properties = new BasicProperties
+                    foreach (var message in messages)
                     {
-                        ContentType = "application/json",
-                        DeliveryMode = DeliveryModes.Persistent,
-                        MessageId = message.Id.ToString(),
-                        Type = message.EventType,
-                        Timestamp = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds())
-                    };
+                        var body = Encoding.UTF8.GetBytes(message.Payload);
+                        var properties = new BasicProperties
+                        {
+                            ContentType = "application/json",
+                            DeliveryMode = DeliveryModes.Persistent,
+                            MessageId = message.Id.ToString(),
+                            Type = message.EventType,
+                            Timestamp = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds())
+                        };
 
-                    await channel.BasicPublishAsync(ExchangeName, routingKey: message.EventType, mandatory: false, properties, body, stoppingToken);
+                        await channel.BasicPublishAsync(ExchangeName, routingKey: message.EventType, mandatory: false, properties, body, stoppingToken);
 
-                    message.IsProcessed = true;
-                    message.ProcessedAt = DateTime.UtcNow;
-                    await context.SaveChangesAsync(stoppingToken);
+                        message.IsProcessed = true;
+                        message.ProcessedAt = DateTime.UtcNow;
 
-                    _logger.LogInformation("Published outbox message {MessageId} of type {EventType}", message.Id, message.EventType);
+                        _logger.LogInformation("Published outbox message {MessageId} of type {EventType}", message.Id, message.EventType);
+                    }
+                }
+                finally
+                {
+                    // One round trip per batch; still marks everything published before a failure
+                    if (context.ChangeTracker.HasChanges())
+                        await context.SaveChangesAsync(CancellationToken.None);
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -106,9 +119,12 @@ public class OutboxProcessor : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error processing outbox messages");
+                batchWasFull = false;
             }
 
-            await Task.Delay(1000, stoppingToken);
+            // Drain backlogs without waiting; only poll-delay when caught up
+            if (!batchWasFull)
+                await Task.Delay(1000, stoppingToken);
         }
     }
 }

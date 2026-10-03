@@ -62,7 +62,7 @@ public class AuditLogConsumer : BackgroundService
         {
             try
             {
-                var body = Encoding.UTF8.GetString(ea.Body.ToArray());
+                var body = Encoding.UTF8.GetString(ea.Body.Span);
                 var eventType = ea.BasicProperties.Type ?? "Unknown";
                 var messageId = ea.BasicProperties.MessageId;
 

@@ -152,7 +152,8 @@ namespace ReleasePilot.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("IsProcessed");
+                    b.HasIndex("CreatedAt")
+                        .HasFilter("\"IsProcessed\" = false");
 
                     b.ToTable("OutboxMessages", (string)null);
                 });

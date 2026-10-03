@@ -26,7 +26,7 @@ builder.Host.UseSerilog((context, services, configuration) => configuration
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? "Host=localhost;Port=5432;Database=releasepilot;Username=releasepilot;Password=releasepilot";
 
-builder.Services.AddDbContext<AppDbContext>(options =>
+builder.Services.AddDbContextPool<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
 
 // --- MediatR (CQRS) ---
